@@ -179,17 +179,16 @@ async function startBotPolling() {
           if (results.length === 0) {
             await bot.sendMessage(chatId, `❌ لم أجد صور باسم "${text}"\n\nجرب: سونيك أو Marine أو Dragon`);
           } else {
-            // إرسال أول 5 صور فقط
-            for (const img of results.slice(0, 5)) {
-              try {
-                await bot.sendPhoto(chatId, img.url, { caption: `📸 ${img.name}` });
-              } catch (err) {
-                console.error(`❌ خطأ في إرسال صورة: ${err.message}`);
-              }
+            // إرسال صورة واحدة فقط
+            const img = results[0];
+            try {
+              await bot.sendPhoto(chatId, img.url, { caption: `📸 ${img.name}` });
+            } catch (err) {
+              console.error(`❌ خطأ في إرسال صورة: ${err.message}`);
             }
             
-            if (results.length > 5) {
-              await bot.sendMessage(chatId, `✅ تم عرض 5 من ${results.length} نتيجة`);
+            if (results.length > 1) {
+              await bot.sendMessage(chatId, `✅ وجدت ${results.length} نتائج - تم عرض الأولى`);
             }
           }
         }
