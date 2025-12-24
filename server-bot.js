@@ -43,16 +43,6 @@ async function loadImageData() {
     if (Object.keys(firestoreData).length > 100) {
       console.log('✅ تم التحميل من Firestore بنجاح');
       IMAGE_META = firestoreData;
-      
-      // بدء نقل الصور إلى Firebase Storage (في الخلفية)
-      if (process.env.NODE_ENV === 'production') {
-        console.log('ℹ️ تم تفعيل نقل الصور إلى Firebase Storage (في الخلفية)');
-        setTimeout(() => {
-          migrateToFirebaseStorage(firestoreData)
-            .catch(err => console.error('❌ خطأ في نقل Storage:', err.message));
-        }, 300000); // 5 دقائق
-      }
-      
       return true;
     }
     
