@@ -17,7 +17,9 @@
     "next": "^15.0.0",
     "node-telegram-bot-api": "^0.65.0",
     "dotenv": "^16.3.1",
-    "firebase-admin": "^12.0.0"
+    "firebase-admin": "^12.0.0",
+    "@opentelemetry/api": "^1.8.0",
+    "@google-cloud/firestore": "^7.5.0"
   },
   "devDependencies": {
     "eslint": "^8.57.0",
