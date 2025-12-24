@@ -36,43 +36,45 @@ function loadImageDataLocal() {
 // تحميل البيانات من Firestore أولاً، وإلا من الملف
 async function loadImageData() {
   try {
-    // تحميل من الملف المحلي أولاً
+    // محاولة تحميل من Firestore أولاً (الأولوية)
+    console.log('📤 محاولة تحميل البيانات من Firestore...');
+    const firestoreData = await getImagesFromFirestore();
+    
+    if (Object.keys(firestoreData).length > 100) {
+      console.log('✅ تم التحميل من Firestore بنجاح');
+      IMAGE_META = firestoreData;
+      
+      // بدء نقل الصور إلى Firebase Storage (في الخلفية)
+      if (process.env.NODE_ENV === 'production') {
+        console.log('ℹ️ تم تفعيل نقل الصور إلى Firebase Storage (في الخلفية)');
+        setTimeout(() => {
+          migrateToFirebaseStorage(firestoreData)
+            .catch(err => console.error('❌ خطأ في نقل Storage:', err.message));
+        }, 300000); // 5 دقائق
+      }
+      
+      return true;
+    }
+    
+    // إذا Firestore فارغ أو فاشل → تحميل من المحلي كـ fallback
+    console.warn('⚠️ Firestore فارغ أو غير متاح - تحميل من الملف المحلي...');
     const localData = loadImageDataLocal();
     
     if (Object.keys(localData).length === 0) {
-      console.warn('⚠️ لم يتمكن من تحميل البيانات المحلية');
+      console.warn('⚠️ لم يتمكن من تحميل البيانات');
       return false;
     }
 
     IMAGE_META = localData;
     
-    // ثم محاولة نقل إلى Firestore
+    // محاولة نقل إلى Firestore
     console.log('📤 محاولة نقل البيانات إلى Firestore...');
     const migrated = await migrateDataToFirestore(localData);
-    
-    if (migrated) {
-      // إذا نقلت بنجاح، حمّل من Firestore
-      const firestoreData = await getImagesFromFirestore();
-      if (Object.keys(firestoreData).length > 100) {
-        console.log('✅ تم التحميل من Firestore بعد النقل الناجح');
-        IMAGE_META = firestoreData;
-        
-        // نقل الصور إلى Firebase Storage بشكل تدريجي جداً (بدون سد البوت)
-        if (process.env.NODE_ENV === 'production') {
-          console.log('ℹ️ تم تفعيل نقل الصور إلى Firebase Storage (في الخلفية)');
-          // تأخير بـ 5 دقائق قبل البدء، و limit الإرسال
-          setTimeout(() => {
-            migrateToFirebaseStorage(localData)
-              .catch(err => console.error('❌ خطأ في نقل Storage:', err.message));
-          }, 300000); // 5 دقائق
-        }
-      }
-    }
     
     return Object.keys(IMAGE_META).length > 0;
   } catch (err) {
     console.warn('⚠️ خطأ في تحميل البيانات:', err.message);
-    // حمّل من الملف المحلي على الأقل
+    // fallback نهائي للملف المحلي
     IMAGE_META = loadImageDataLocal();
     return Object.keys(IMAGE_META).length > 0;
   }
