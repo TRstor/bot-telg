@@ -4,12 +4,21 @@
 const TelegramBot = require('node-telegram-bot-api');
 
 let bot = null;
+let isStarting = false;
 
 async function startBotPolling() {
+  // منع التشغيل المتعدد
+  if (bot || isStarting) {
+    console.log('✅ البوت يعمل بالفعل - تخطي إعادة البدء');
+    return;
+  }
+
+  isStarting = true;
   const token = process.env.TELEGRAM_BOT_TOKEN;
   
   if (!token) {
     console.warn('⚠️ TELEGRAM_BOT_TOKEN غير موجود - البوت غير مفعل');
+    isStarting = false;
     return;
   }
 
@@ -148,9 +157,22 @@ async function startBotPolling() {
       }
     });
 
+    // معالجة الأخطاء
+    bot.on('polling_error', (err) => {
+      if (err.code === 'ETELEGRAM' && err.message.includes('409')) {
+        console.warn('⚠️ تحذير: اكتشاف نسخ متعددة من البوت!');
+        console.warn('⚠️ يجب إيقاف النسخة الأخرى من البوت');
+      } else {
+        console.error('❌ خطأ في Polling:', err.message);
+      }
+    });
+
     console.log('🤖 البوت يعمل بنجاح مع polling');
+    isStarting = false;
   } catch (err) {
     console.error('❌ خطأ في تشغيل البوت:', err.message);
+    isStarting = false;
+    bot = null;
   }
 }
 
