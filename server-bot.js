@@ -2,9 +2,35 @@
 // هذا الملف يشغل polling البوت في الخلفية مع خادم Next.js
 
 const TelegramBot = require('node-telegram-bot-api');
+const fs = require('fs');
+const path = require('path');
 
 let bot = null;
 let isStarting = false;
+let IMAGE_META = {};
+
+// تحميل بيانات الصور من الملف
+function loadImageData() {
+  try {
+    const dataPath = path.join(process.cwd(), 'public', 'gallery-data.js');
+    if (fs.existsSync(dataPath)) {
+      const fileContent = fs.readFileSync(dataPath, 'utf-8');
+      const metaMatch = fileContent.match(/const\s+IMAGE_META\s*=\s*(\{[\s\S]*?\});/);
+      if (metaMatch) {
+        try {
+          IMAGE_META = eval('(' + metaMatch[1] + ')');
+          console.log('✅ تم تحميل:', Object.keys(IMAGE_META).length, 'صورة');
+          return true;
+        } catch (e) {
+          console.warn('⚠️ خطأ في تحليل البيانات:', e.message);
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('⚠️ لم يتمكن من تحميل بيانات الصور:', err.message);
+  }
+  return false;
+}
 
 async function startBotPolling() {
   // منع التشغيل المتعدد
@@ -22,24 +48,12 @@ async function startBotPolling() {
     return;
   }
 
-  if (bot) {
-    console.log('✅ البوت يعمل بالفعل');
-    return;
-  }
-
   try {
     bot = new TelegramBot(token, { polling: true });
     console.log('✅ بدء polling البوت...');
 
     // تحميل بيانات الصور
-    let IMAGE_META = {};
-    try {
-      const galleryData = require('./public/gallery-data.js');
-      IMAGE_META = galleryData.IMAGE_META || {};
-      console.log('✅ تم تحميل:', Object.keys(IMAGE_META).length, 'صورة');
-    } catch (err) {
-      console.warn('⚠️ خطأ في تحميل البيانات:', err.message);
-    }
+    loadImageData();
 
     // 📨 معالجة الرسائل
     bot.on('message', async (msg) => {
