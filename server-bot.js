@@ -4,13 +4,14 @@
 const TelegramBot = require('node-telegram-bot-api');
 const fs = require('fs');
 const path = require('path');
+const { getImagesFromFirestore, migrateDataToFirestore } = require('./lib/firebase');
 
 let bot = null;
 let isStarting = false;
 let IMAGE_META = {};
 
 // تحميل بيانات الصور من الملف
-function loadImageData() {
+function loadImageDataLocal() {
   try {
     const dataPath = path.join(process.cwd(), 'public', 'gallery-data.js');
     if (fs.existsSync(dataPath)) {
@@ -19,17 +20,46 @@ function loadImageData() {
       if (metaMatch) {
         try {
           IMAGE_META = eval('(' + metaMatch[1] + ')');
-          console.log('✅ تم تحميل:', Object.keys(IMAGE_META).length, 'صورة');
-          return true;
+          console.log('✅ تم تحميل (محلي):', Object.keys(IMAGE_META).length, 'صورة');
+          return IMAGE_META;
         } catch (e) {
           console.warn('⚠️ خطأ في تحليل البيانات:', e.message);
         }
       }
     }
   } catch (err) {
-    console.warn('⚠️ لم يتمكن من تحميل بيانات الصور:', err.message);
+    console.warn('⚠️ لم يتمكن من تحميل بيانات الصور المحلية:', err.message);
   }
-  return false;
+  return {};
+}
+
+// تحميل البيانات من Firestore أولاً، وإلا من الملف
+async function loadImageData() {
+  try {
+    // محاولة تحميل من Firestore
+    const firestoreData = await getImagesFromFirestore();
+    if (Object.keys(firestoreData).length > 0) {
+      IMAGE_META = firestoreData;
+      return true;
+    }
+  } catch (err) {
+    console.warn('⚠️ خطأ في تحميل من Firestore:', err.message);
+  }
+
+  // إذا فشل Firestore، تحميل من الملف
+  const localData = loadImageDataLocal();
+  IMAGE_META = localData;
+  
+  // محاولة نقل البيانات إلى Firestore
+  if (Object.keys(localData).length > 0) {
+    try {
+      await migrateDataToFirestore(localData);
+    } catch (err) {
+      console.warn('⚠️ لم يتمكن من نقل البيانات:', err.message);
+    }
+  }
+  
+  return Object.keys(IMAGE_META).length > 0;
 }
 
 async function startBotPolling() {
@@ -53,7 +83,7 @@ async function startBotPolling() {
     console.log('✅ بدء polling البوت...');
 
     // تحميل بيانات الصور
-    loadImageData();
+    await loadImageData();
 
     // 📨 معالجة الرسائل
     bot.on('message', async (msg) => {
