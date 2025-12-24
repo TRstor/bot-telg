@@ -31,6 +31,21 @@ function getUrlHash(url) {
   return crypto.createHash('sha256').update(url).digest('hex').substring(0, 32);
 }
 
+// تحديث الـ cache في API
+function updateApiCache() {
+  try {
+    // محاولة تحديث الـ cache في API
+    const { setCachedImages } = require('./app/api/bot/route.js');
+    if (setCachedImages) {
+      setCachedImages(IMAGE_META);
+      console.log('✅ تم تحديث cache الصور في API');
+    }
+  } catch (err) {
+    // لا مشكلة إذا فشل - الـ cache سيُحدّث عند الطلب الأول
+    console.warn('⚠️ لم نتمكن من تحديث API cache:', err.message);
+  }
+}
+
 // تحميل البيانات من Firestore فقط (بدون fallback محلي)
 async function loadImageData() {
   try {
@@ -44,6 +59,7 @@ async function loadImageData() {
 
     console.log('✅ تم التحميل من Firestore بنجاح:', Object.keys(firestoreData).length, 'صورة');
     IMAGE_META = firestoreData;
+    updateApiCache(); // تحديث الـ cache في API
     return true;
   } catch (err) {
     console.error('❌ خطأ في تحميل البيانات من Firestore:', err.message);
@@ -71,8 +87,13 @@ async function startBotPolling() {
     bot = new TelegramBot(token, { polling: true });
     console.log('✅ بدء polling البوت...');
 
-    // تحميل بيانات الصور
-    await loadImageData();
+    // تحميل بيانات الصور بشكل غير متزامن (بدون انتظار)
+    // حتى يبدأ البوت باستقبال الرسائل فوراً
+    loadImageData().then(() => {
+      console.log('✅ انتهى تحميل الصور من Firestore');
+    }).catch(err => {
+      console.error('❌ خطأ في تحميل الصور:', err.message);
+    });
 
     // تنظيف cache المفضلات القديمة كل ساعة
     setInterval(() => {
@@ -243,6 +264,15 @@ async function startBotPolling() {
           // البحث عن الصور (إذا لم يكن المستخدم في عملية إضافة)
           if (userStates[chatId]) {
             await bot.sendMessage(chatId, '⚠️ أنت في عملية إضافة صورة. اكتب اسم الصورة أو /cancel');
+            return;
+          }
+          
+          // التحقق من أن الصور قد تم تحميلها
+          if (Object.keys(IMAGE_META).length === 0) {
+            await bot.sendMessage(chatId, 
+              '⏳ جاري تحميل الصور من Firestore...\n\n' +
+              'الرجاء محاولة البحث مرة أخرى خلال لحظات 📸'
+            );
             return;
           }
           

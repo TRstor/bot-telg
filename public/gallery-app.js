@@ -18,6 +18,11 @@ function loadFavs(){ try { return JSON.parse(localStorage.getItem(FAV_KEY) || "[
 function saveFavs(list){ localStorage.setItem(FAV_KEY, JSON.stringify(list)); }
 let favorites = loadFavs();
 
+// بيانات فارغة - سيتم التحميل من API الخادم
+const topImages = [];
+const KOREA_URLS = [];
+const HOME_URLS = [];
+
 const CATS = {
   all: topImages,
   korea: KOREA_URLS,
@@ -234,7 +239,41 @@ if (searchInput) {
   searchInput.addEventListener("keydown", (e)=>{ if(e.key === "Enter"){ e.preventDefault(); applySearch(); }});
 }
 
+// تحميل الصور من Firestore عند بدء الصفحة
+async function loadImagesFromFirestore() {
+  try {
+    const response = await fetch('/api/bot?action=getImages');
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    
+    const data = await response.json();
+    if (data.images && typeof data.images === 'object') {
+      // تحويل البيانات من {url: {name, keywords}} إلى topImages array
+      const loadedImages = [];
+      for (const [url, meta] of Object.entries(data.images)) {
+        if (url && meta && meta.name) {
+          loadedImages.push(url);
+        }
+      }
+      
+      if (loadedImages.length > 0) {
+        topImages.length = 0;
+        topImages.push(...loadedImages);
+        CATS.all = topImages;
+        console.log(`✅ تم تحميل ${loadedImages.length} صورة`);
+      }
+    }
+  } catch (err) {
+    console.error('❌ خطأ في تحميل الصور:', err.message);
+  }
+  
+  // إعادة رسم المعرض
+  render();
+}
+
 render();
+
+// تحميل الصور عند بدء الصفحة
+loadImagesFromFirestore();
 
 document.addEventListener('contextmenu', e => {
   e.preventDefault();
