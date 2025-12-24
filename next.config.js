@@ -2,7 +2,17 @@
 const nextConfig = {
   reactStrictMode: true,
   
-  // إعدادات الصور
+  rewrites: async () => {
+    return {
+      beforeFiles: [
+        {
+          source: '/',
+          destination: '/index.html',
+        },
+      ],
+    };
+  },
+  
   images: {
     remotePatterns: [
       {
@@ -16,8 +26,5 @@ const nextConfig = {
     ],
   },
 };
-
-console.log('🔧 تحميل إعدادات Next.js');
-console.log('📦 NODE_ENV:', process.env.NODE_ENV);
 
 module.exports = nextConfig;
