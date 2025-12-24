@@ -4,7 +4,18 @@
 const TelegramBot = require('node-telegram-bot-api');
 const fs = require('fs');
 const path = require('path');
-const { getImagesFromFirestore, migrateDataToFirestore, addImageToFirestore } = require('./lib/firebase');
+const { 
+  getImagesFromFirestore, 
+  migrateDataToFirestore, 
+  addImageToFirestore,
+  addToFavorites,
+  removeFromFavorites,
+  getFavorites,
+  saveUserData,
+  logSearch,
+  logActivity,
+  updateImageStatistics
+} = require('./lib/firebase');
 
 let bot = null;
 let isStarting = false;
@@ -139,9 +150,32 @@ async function startBotPolling() {
             '🔍 اكتب اسم الصورة للبحث\n' +
             '/gallery - فتح المعرض\n' +
             '/categories - الفئات\n' +
+            '/favorites - الصور المفضلة\n' +
             '/addimage - إضافة صورة جديدة\n' +
             '/start - القائمة الرئيسية'
           );
+        } else if (text === '/favorites') {
+          // عرض الصور المفضلة
+          const userId = msg.from.id;
+          const favorites = await getFavorites(userId);
+          
+          if (favorites.length === 0) {
+            await bot.sendMessage(chatId, 
+              '❤️ لا توجد صور مفضلة حتى الآن\n\n' +
+              'ابدأ بالبحث والضغط على ❤️ لإضافة صور'
+            );
+          } else {
+            let message = `❤️ المفضلة (${favorites.length}):\n\n`;
+            favorites.slice(0, 10).forEach((fav, index) => {
+              message += `${index + 1}. ${fav.imageName}\n`;
+            });
+            
+            if (favorites.length > 10) {
+              message += `\n... و${favorites.length - 10} أخرى`;
+            }
+            
+            await bot.sendMessage(chatId, message);
+          }
         } else if (text === '/addimage') {
           // بدء عملية إضافة صورة جديدة
           userStates[chatId] = {
@@ -227,6 +261,10 @@ async function startBotPolling() {
           }
 
           console.log(`🔍 بحث عن "${text}" -> نتائج: ${results.length}`);
+          
+          // تسجيل البحث في Firestore
+          const userId = msg.from.id;
+          await logSearch(userId, text, results.length);
 
           if (results.length === 0) {
             await bot.sendMessage(chatId, `❌ لم أجد صور باسم "${text}"\n\nجرب: سونيك أو Marine أو Dragon`);
@@ -234,7 +272,19 @@ async function startBotPolling() {
             // إرسال صورة واحدة فقط
             const img = results[0];
             try {
-              await bot.sendPhoto(chatId, img.url, { caption: `📸 ${img.name}` });
+              // تحديث الإحصائيات
+              await updateImageStatistics(img.url, 'view');
+              
+              await bot.sendPhoto(chatId, img.url, { 
+                caption: `📸 ${img.name}`,
+                reply_markup: {
+                  inline_keyboard: [
+                    [
+                      { text: '❤️ مفضلة', callback_data: `fav_${encodeURIComponent(img.url)}_${encodeURIComponent(img.name)}` }
+                    ]
+                  ]
+                }
+              });
             } catch (err) {
               console.error(`❌ خطأ في إرسال صورة: ${err.message}`);
             }
@@ -290,7 +340,33 @@ async function startBotPolling() {
         await bot.answerCallbackQuery(id);
 
         if (data === 'help') {
-          await bot.sendMessage(chatId, '📖 المساعدة:\n\n🔍 اكتب اسم الصورة\n/gallery - المعرض\n/categories - الفئات\n/addimage - إضافة صورة');
+          await bot.sendMessage(chatId, '📖 المساعدة:\n\n🔍 اكتب اسم الصورة\n/gallery - المعرض\n/categories - الفئات\n/favorites - المفضلة\n/addimage - إضافة صورة');
+        } else if (data.startsWith('fav_')) {
+          // إضافة/حذف من المفضلات
+          const parts = data.split('_').slice(1);
+          const imageUrl = decodeURIComponent(parts[0]);
+          const imageName = decodeURIComponent(parts.slice(1).join('_'));
+          const userId = from.id;
+          
+          try {
+            // التحقق من وجودها بالفعل
+            const favorites = await getFavorites(userId);
+            const isFavorited = favorites.some(f => f.imageUrl === imageUrl);
+            
+            if (isFavorited) {
+              await removeFromFavorites(userId, imageUrl);
+              await bot.answerCallbackQuery(id, { text: '💔 تمت الإزالة من المفضلات', show_alert: false });
+              await updateImageStatistics(imageUrl, 'unfavorite');
+            } else {
+              await addToFavorites(userId, imageUrl, imageName);
+              await bot.answerCallbackQuery(id, { text: '❤️ تمت الإضافة للمفضلات', show_alert: false });
+              await updateImageStatistics(imageUrl, 'favorite');
+              await logActivity(userId, 'added_favorite', `أضاف ${imageName} للمفضلات`);
+            }
+          } catch (err) {
+            console.error('❌ خطأ في المفضلات:', err.message);
+            await bot.answerCallbackQuery(id, { text: '❌ حدث خطأ', show_alert: true });
+          }
         } else if (data === 'cancel_add') {
           // إلغاء عملية إضافة الصورة
           delete userStates[chatId];
@@ -332,6 +408,11 @@ async function startBotPolling() {
               };
               
               console.log(`✅ تم حفظ الصورة بنجاح: ${state.name}`);
+              
+              // تسجيل النشاط وحفظ بيانات المستخدم
+              const userId = from.id;
+              await logActivity(userId, 'added_image', `أضاف صورة: ${state.name}`);
+              await saveUserData(userId, { username: from.first_name });
               
               await bot.sendMessage(chatId,
                 `✅ تمت الإضافة بنجاح!\n\n` +
