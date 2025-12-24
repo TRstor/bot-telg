@@ -122,12 +122,6 @@ export default function GalleryScript() {
     document.documentElement.appendChild(styleTag);
 
     // ===== HTML =====
-    var center = document.createElement("div");
-    center.className = "popu-center";
-    center.innerHTML = `<button class="popu-btn" type="button">فتح معرض الشعبيات</button>`;
-    document.body.appendChild(center);
-    var openBtn = center.querySelector(".popu-btn");
-
     var overlay = document.createElement("div");
     overlay.className = "popu-overlay";
     overlay.innerHTML = `
@@ -208,7 +202,8 @@ export default function GalleryScript() {
     function showOverlay() { overlay.classList.add("show"); renderGrid(); updateCatButtons(); }
     function hideOverlay() { overlay.classList.remove("show"); closeDrawer(); closeViewer(); }
 
-    openBtn.addEventListener("click", showOverlay);
+    // عرض المعرض تلقائياً عند التحميل
+    showOverlay();
     closeBtn.addEventListener("click", hideOverlay);
 
     function openDrawer() { drawer.classList.add("show"); drawer.setAttribute("aria-hidden", "false"); drawerMask.classList.add("show"); }
