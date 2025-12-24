@@ -150,7 +150,7 @@ export default function GalleryScript() {
           currentIndex = list.indexOf(u);
           vImg.src = u;
           vCap.textContent = `${getCategoryForUrl(u)} • ${i + 1}/${list.length}`;
-          getCount(u)++;
+          viewCache[u] = (viewCache[u] || 0) + 1;
           openViewer();
         });
 
