@@ -1,0 +1,138 @@
+// ⚡ ملف تشغيل البوت في الخادم (يعمل مرة واحدة عند البدء)
+// هذا الملف يشغل polling البوت في الخلفية مع خادم Next.js
+
+const TelegramBot = require('node-telegram-bot-api');
+
+let bot = null;
+
+async function startBotPolling() {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  
+  if (!token) {
+    console.warn('⚠️ TELEGRAM_BOT_TOKEN غير موجود - البوت غير مفعل');
+    return;
+  }
+
+  if (bot) {
+    console.log('✅ البوت يعمل بالفعل');
+    return;
+  }
+
+  try {
+    bot = new TelegramBot(token, { polling: true });
+    console.log('✅ بدء polling البوت...');
+
+    // تحميل بيانات الصور
+    let IMAGE_META = {};
+    try {
+      const galleryData = require('./public/gallery-data.js');
+      IMAGE_META = galleryData.IMAGE_META || {};
+      console.log('✅ تم تحميل:', Object.keys(IMAGE_META).length, 'صورة');
+    } catch (err) {
+      console.warn('⚠️ خطأ في تحميل البيانات:', err.message);
+    }
+
+    // 📨 معالجة الرسائل
+    bot.on('message', async (msg) => {
+      const chatId = msg.chat.id;
+      const text = msg.text || '';
+      const GALLERY_URL = process.env.RENDER_EXTERNAL_URL || 'https://bot-tel-4p2k.onrender.com';
+
+      try {
+        if (text === '/start') {
+          await bot.sendMessage(chatId, 
+            '🎮 مرحباً في معرض شعبيات PUBG!\n\n' +
+            'اختر ما تريد:',
+            {
+              reply_markup: {
+                inline_keyboard: [
+                  [{ text: '📱 فتح المعرض', url: GALLERY_URL }],
+                  [{ text: '📖 المساعدة', callback_data: 'help' }],
+                ],
+              },
+            }
+          );
+        } else if (text === '/gallery') {
+          await bot.sendMessage(chatId, '📸 فتح المعرض:', {
+            reply_markup: {
+              inline_keyboard: [[{ text: '📱 اذهب للمعرض', url: GALLERY_URL }]],
+            },
+          });
+        } else if (text === '/categories') {
+          await bot.sendMessage(chatId, '🎯 اختر الفئة:', {
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: '📺 الكل', callback_data: 'cat_all' }],
+                [{ text: '🇰🇷 الكورية', callback_data: 'cat_korea' }],
+                [{ text: '🏠 المنزل', callback_data: 'cat_home' }],
+                [{ text: '❤️ المفضلة', callback_data: 'cat_fav' }],
+              ],
+            },
+          });
+        } else if (text === '/help') {
+          await bot.sendMessage(chatId, 
+            'ℹ️ كيفية الاستخدام:\n\n' +
+            '🔍 اكتب اسم الصورة للبحث\n' +
+            '/gallery - فتح المعرض\n' +
+            '/categories - الفئات\n' +
+            '/start - القائمة الرئيسية'
+          );
+        } else if (!text.startsWith('/') && text.trim()) {
+          // البحث عن الصور
+          const normalized = text.toLowerCase().replace(/[ـَُِّْ]/g, '').replace(/ة/g, 'ه');
+          const results = [];
+
+          for (const [url, meta] of Object.entries(IMAGE_META)) {
+            const name = (meta.name || '').toLowerCase().replace(/[ـَُِّْ]/g, '').replace(/ة/g, 'ه');
+            if (name.includes(normalized)) {
+              results.push({ url, name: meta.name });
+            }
+          }
+
+          if (results.length === 0) {
+            await bot.sendMessage(chatId, `❌ لم أجد صور باسم "${text}"`);
+          } else {
+            for (const img of results.slice(0, 3)) {
+              await bot.sendPhoto(chatId, img.url, { caption: `📸 ${img.name}` });
+            }
+          }
+        }
+      } catch (err) {
+        console.error('❌ خطأ:', err.message);
+        await bot.sendMessage(chatId, '❌ حدث خطأ').catch(() => {});
+      }
+    });
+
+    // 🔘 معالجة الأزرار
+    bot.on('callback_query', async (query) => {
+      const { id, data, from } = query;
+      const chatId = from.id;
+
+      try {
+        await bot.answerCallbackQuery(id);
+
+        if (data === 'help') {
+          await bot.sendMessage(chatId, '📖 المساعدة:\n\n🔍 اكتب اسم الصورة\n/gallery - المعرض\n/categories - الفئات');
+        } else if (data.startsWith('cat_')) {
+          const cat = data.replace('cat_', '');
+          const catNames = { all: 'الكل', korea: 'الكورية', home: 'المنزل', fav: 'المفضلة' };
+          await bot.sendMessage(chatId, `✅ تم اختيار: ${catNames[cat] || cat}`);
+        }
+      } catch (err) {
+        console.error('❌ خطأ في الزر:', err.message);
+      }
+    });
+
+    console.log('🤖 البوت يعمل بنجاح مع polling');
+  } catch (err) {
+    console.error('❌ خطأ في تشغيل البوت:', err.message);
+  }
+}
+
+// تشغيل البوت عند بدء الخادم
+if (typeof window === 'undefined') {
+  // Server-side only
+  startBotPolling().catch(console.error);
+}
+
+module.exports = { startBotPolling };
