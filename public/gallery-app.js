@@ -272,9 +272,7 @@ async function loadImagesFromFirestore() {
   render();
 }
 
-render();
-
-// تحميل الصور عند بدء الصفحة
+// تحميل الصور عند بدء الصفحة (بدون render أولاً)
 loadImagesFromFirestore();
 
 document.addEventListener('contextmenu', e => {
