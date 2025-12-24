@@ -4,9 +4,9 @@
 const TelegramBot = require('node-telegram-bot-api');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const { 
-  getImagesFromFirestore, 
-  addImageToFirestore,
+  getImagesFromFirestore,
   addToFavorites,
   removeFromFavorites,
   getFavorites,
@@ -22,6 +22,14 @@ let IMAGE_META = {};
 
 // 🔄 نظام حفظ حالة المستخدمين (user states for image upload)
 const userStates = {};
+
+// تخزين مؤقت لبيانات الصور (للمفضلات)
+const imageCache = {};
+
+// دالة لحساب hash للـ URL
+function getUrlHash(url) {
+  return crypto.createHash('sha256').update(url).digest('hex').substring(0, 32);
+}
 
 // تحميل البيانات من Firestore فقط (بدون fallback محلي)
 async function loadImageData() {
@@ -260,12 +268,16 @@ async function startBotPolling() {
               // تحديث الإحصائيات
               await updateImageStatistics(img.url, 'view');
               
+              // حفظ الصورة في cache مؤقتاً
+              const urlHash = getUrlHash(img.url);
+              imageCache[urlHash] = { url: img.url, name: img.name };
+              
               await bot.sendPhoto(chatId, img.url, { 
                 caption: `📸 ${img.name}`,
                 reply_markup: {
                   inline_keyboard: [
                     [
-                      { text: '❤️ مفضلة', callback_data: `fav_${encodeURIComponent(img.url)}_${encodeURIComponent(img.name)}` }
+                      { text: '❤️ مفضلة', callback_data: `fav_${urlHash}` }
                     ]
                   ]
                 }
@@ -297,9 +309,16 @@ async function startBotPolling() {
           await bot.sendMessage(chatId, '📖 المساعدة:\n\n🔍 اكتب اسم الصورة\n/gallery - المعرض\n/categories - الفئات\n/favorites - المفضلة\n/addimage - إضافة صورة');
         } else if (data.startsWith('fav_')) {
           // إضافة/حذف من المفضلات
-          const parts = data.split('_').slice(1);
-          const imageUrl = decodeURIComponent(parts[0]);
-          const imageName = decodeURIComponent(parts.slice(1).join('_'));
+          const urlHash = data.replace('fav_', '');
+          const imageData = imageCache[urlHash];
+          
+          if (!imageData) {
+            await bot.answerCallbackQuery(id, { text: '❌ خطأ: لم نتمكن من إيجاد الصورة', show_alert: true });
+            return;
+          }
+          
+          const imageUrl = imageData.url;
+          const imageName = imageData.name;
           const userId = from.id;
           
           try {
