@@ -1,23 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  swcMinify: true,
-  
-  // تحسين الأداء
-  compress: true,
-  poweredByHeader: false,
-  
-  // معالجة الأخطاء
-  onError: (error) => {
-    console.error('❌ خطأ في البناء:', error);
-  },
-  
-  // logging
-  logging: {
-    fetches: {
-      fullUrl: true,
-    },
-  },
   
   // إعدادات الصور
   images: {
