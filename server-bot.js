@@ -79,21 +79,46 @@ async function startBotPolling() {
           );
         } else if (!text.startsWith('/') && text.trim()) {
           // البحث عن الصور
-          const normalized = text.toLowerCase().replace(/[ـَُِّْ]/g, '').replace(/ة/g, 'ه');
+          const normalizeText = (str) => {
+            return (str || '')
+              .trim()
+              .toLowerCase()
+              .replace(/[ـَُِّْ]/g, '') // حذف التشكيل
+              .replace(/ة/g, 'ه')        // تحويل ة إلى ه
+              .replace(/ي/g, 'ي')        // توحيد الياء
+              .replace(/\s+/g, ' ');     // توحيد المسافات
+          };
+
+          const searchNorm = normalizeText(text);
           const results = [];
 
+          // البحث في جميع الصور
           for (const [url, meta] of Object.entries(IMAGE_META)) {
-            const name = (meta.name || '').toLowerCase().replace(/[ـَُِّْ]/g, '').replace(/ة/g, 'ه');
-            if (name.includes(normalized)) {
-              results.push({ url, name: meta.name });
+            const name = (meta.name || '');
+            const nameNorm = normalizeText(name);
+            
+            // البحث بالكلمات الجزئية
+            if (nameNorm.includes(searchNorm) || searchNorm.includes(nameNorm)) {
+              results.push({ url, name });
             }
           }
 
+          console.log(`🔍 بحث عن "${text}" -> نتائج: ${results.length}`);
+
           if (results.length === 0) {
-            await bot.sendMessage(chatId, `❌ لم أجد صور باسم "${text}"`);
+            await bot.sendMessage(chatId, `❌ لم أجد صور باسم "${text}"\n\nجرب: سونيك أو Marine أو Dragon`);
           } else {
-            for (const img of results.slice(0, 3)) {
-              await bot.sendPhoto(chatId, img.url, { caption: `📸 ${img.name}` });
+            // إرسال أول 5 صور فقط
+            for (const img of results.slice(0, 5)) {
+              try {
+                await bot.sendPhoto(chatId, img.url, { caption: `📸 ${img.name}` });
+              } catch (err) {
+                console.error(`❌ خطأ في إرسال صورة: ${err.message}`);
+              }
+            }
+            
+            if (results.length > 5) {
+              await bot.sendMessage(chatId, `✅ تم عرض 5 من ${results.length} نتيجة`);
             }
           }
         }
