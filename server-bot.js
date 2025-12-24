@@ -10,6 +10,9 @@ let bot = null;
 let isStarting = false;
 let IMAGE_META = {};
 
+// 🔄 نظام حفظ حالة المستخدمين (user states for image upload)
+const userStates = {};
+
 // تحميل بيانات الصور من الملف
 function loadImageDataLocal() {
   try {
@@ -136,10 +139,69 @@ async function startBotPolling() {
             '🔍 اكتب اسم الصورة للبحث\n' +
             '/gallery - فتح المعرض\n' +
             '/categories - الفئات\n' +
+            '/addimage - إضافة صورة جديدة\n' +
             '/start - القائمة الرئيسية'
           );
+        } else if (text === '/addimage') {
+          // بدء عملية إضافة صورة جديدة
+          userStates[chatId] = {
+            step: 1,
+            photo: null,
+            name: '',
+            category: ''
+          };
+          
+          await bot.sendMessage(chatId,
+            '🖼️ الخطوة 1/3\n\n' +
+            'أرسل الصورة التي تريد إضافتها\n' +
+            '(PNG أو JPG أو WebP)\n\n' +
+            'لإلغاء العملية: /cancel',
+            {
+              reply_markup: {
+                inline_keyboard: [
+                  [{ text: '❌ إلغاء', callback_data: 'cancel_add' }]
+                ]
+              }
+            }
+          );
+        } else if (text === '/cancel') {
+          // إلغاء العملية
+          if (userStates[chatId]) {
+            delete userStates[chatId];
+            await bot.sendMessage(chatId, '❌ تم إلغاء العملية');
+          } else {
+            await bot.sendMessage(chatId, '⚠️ لا توجد عملية جارية');
+          }
         } else if (!text.startsWith('/') && text.trim()) {
-          // البحث عن الصور
+          // التحقق من حالة المستخدم - هل هو في خطوة إضافة اسم الصورة؟
+          if (userStates[chatId]?.step === 2) {
+            userStates[chatId].name = text;
+            userStates[chatId].step = 3;
+            
+            // طلب اختيار الفئة
+            await bot.sendMessage(chatId,
+              '🎯 الخطوة 3/3\n\n' +
+              'اختر فئة الصورة:',
+              {
+                reply_markup: {
+                  inline_keyboard: [
+                    [{ text: '🇰🇷 كوري', callback_data: 'addimg_korea' }],
+                    [{ text: '🌍 عالمي', callback_data: 'addimg_all' }],
+                    [{ text: '🏠 المنزل', callback_data: 'addimg_home' }],
+                    [{ text: '❌ إلغاء', callback_data: 'cancel_add' }]
+                  ]
+                }
+              }
+            );
+            return;
+          }
+          
+          // البحث عن الصور (إذا لم يكن المستخدم في عملية إضافة)
+          if (userStates[chatId]) {
+            await bot.sendMessage(chatId, '⚠️ أنت في عملية إضافة صورة. اكتب اسم الصورة أو /cancel');
+            return;
+          }
+          
           const normalizeText = (str) => {
             return (str || '')
               .trim()
@@ -188,7 +250,38 @@ async function startBotPolling() {
       }
     });
 
-    // 🔘 معالجة الأزرار
+    // � معالجة استقبال الصور
+    bot.on('photo', async (msg) => {
+      const chatId = msg.chat.id;
+      
+      try {
+        // التحقق من أن المستخدم في عملية إضافة صورة
+        if (!userStates[chatId] || userStates[chatId].step !== 1) {
+          await bot.sendMessage(chatId, 
+            '⚠️ استخدم /addimage أولاً لإضافة صورة جديدة');
+          return;
+        }
+
+        // حفظ معرف الصورة من Telegram
+        const photo = msg.photo[msg.photo.length - 1]; // أعلى جودة
+        
+        userStates[chatId].photo = photo.file_id;
+        userStates[chatId].step = 2;
+
+        // طلب اسم الصورة
+        await bot.sendMessage(chatId,
+          '📝 الخطوة 2/3\n\n' +
+          'اكتب اسم الصورة:\n' +
+          '(مثال: سونيك أحمر، عروس، ...)'
+        );
+      } catch (err) {
+        console.error('❌ خطأ في استقبال الصورة:', err.message);
+        await bot.sendMessage(chatId, '❌ حدث خطأ في استقبال الصورة');
+        delete userStates[chatId];
+      }
+    });
+
+    // �🔘 معالجة الأزرار
     bot.on('callback_query', async (query) => {
       const { id, data, from } = query;
       const chatId = from.id;
@@ -197,7 +290,60 @@ async function startBotPolling() {
         await bot.answerCallbackQuery(id);
 
         if (data === 'help') {
-          await bot.sendMessage(chatId, '📖 المساعدة:\n\n🔍 اكتب اسم الصورة\n/gallery - المعرض\n/categories - الفئات');
+          await bot.sendMessage(chatId, '📖 المساعدة:\n\n🔍 اكتب اسم الصورة\n/gallery - المعرض\n/categories - الفئات\n/addimage - إضافة صورة');
+        } else if (data === 'cancel_add') {
+          // إلغاء عملية إضافة الصورة
+          delete userStates[chatId];
+          await bot.sendMessage(chatId, '❌ تم إلغاء عملية الإضافة');
+        } else if (data.startsWith('addimg_')) {
+          // إنهاء عملية إضافة الصورة وحفظها
+          const category = data.replace('addimg_', '');
+          
+          if (!userStates[chatId] || userStates[chatId].step !== 3) {
+            await bot.sendMessage(chatId, '⚠️ حدث خطأ. استخدم /addimage للبدء من جديد');
+            return;
+          }
+          
+          try {
+            userStates[chatId].category = category;
+            const state = userStates[chatId];
+            
+            // حفظ الصورة في Firestore
+            const catNames = { korea: 'كوري', all: 'عالمي', home: 'المنزل' };
+            const categoryName = catNames[category] || category;
+            
+            // استخدام file_id من Telegram مباشرة كـ URL
+            const imageUrl = `tg://file/${state.photo}`;
+            
+            const { addImageToFirestore } = require('./lib/firebase');
+            const added = await addImageToFirestore(
+              imageUrl,
+              state.name,
+              [category]
+            );
+            
+            if (added) {
+              // تحديث IMAGE_META محلياً
+              IMAGE_META[imageUrl] = {
+                name: state.name,
+                keywords: [category]
+              };
+              
+              await bot.sendMessage(chatId,
+                `✅ تمت الإضافة بنجاح!\n\n` +
+                `📸 ${state.name}\n` +
+                `🎯 ${categoryName}`
+              );
+            } else {
+              await bot.sendMessage(chatId, '❌ حدث خطأ في حفظ الصورة');
+            }
+            
+            delete userStates[chatId];
+          } catch (err) {
+            console.error('❌ خطأ في إضافة الصورة:', err.message);
+            await bot.sendMessage(chatId, '❌ حدث خطأ في الحفظ');
+            delete userStates[chatId];
+          }
         } else if (data.startsWith('cat_')) {
           const cat = data.replace('cat_', '');
           const catNames = { all: 'الكل', korea: 'الكورية', home: 'المنزل', fav: 'المفضلة' };
