@@ -2,17 +2,6 @@
 const nextConfig = {
   reactStrictMode: true,
   
-  rewrites: async () => {
-    return {
-      beforeFiles: [
-        {
-          source: '/',
-          destination: '/index.html',
-        },
-      ],
-    };
-  },
-  
   images: {
     remotePatterns: [
       {
