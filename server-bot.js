@@ -6,7 +6,6 @@ const fs = require('fs');
 const path = require('path');
 const { 
   getImagesFromFirestore, 
-  migrateDataToFirestore, 
   addImageToFirestore,
   addToFavorites,
   removeFromFavorites,
@@ -24,63 +23,23 @@ let IMAGE_META = {};
 // 🔄 نظام حفظ حالة المستخدمين (user states for image upload)
 const userStates = {};
 
-// تحميل بيانات الصور من الملف
-function loadImageDataLocal() {
-  try {
-    const dataPath = path.join(process.cwd(), 'public', 'gallery-data.js');
-    if (fs.existsSync(dataPath)) {
-      const fileContent = fs.readFileSync(dataPath, 'utf-8');
-      const metaMatch = fileContent.match(/const\s+IMAGE_META\s*=\s*(\{[\s\S]*?\});/);
-      if (metaMatch) {
-        try {
-          IMAGE_META = eval('(' + metaMatch[1] + ')');
-          console.log('✅ تم تحميل (محلي):', Object.keys(IMAGE_META).length, 'صورة');
-          return IMAGE_META;
-        } catch (e) {
-          console.warn('⚠️ خطأ في تحليل البيانات:', e.message);
-        }
-      }
-    }
-  } catch (err) {
-    console.warn('⚠️ لم يتمكن من تحميل بيانات الصور المحلية:', err.message);
-  }
-  return {};
-}
-
-// تحميل البيانات من Firestore أولاً، وإلا من الملف
+// تحميل البيانات من Firestore فقط (بدون fallback محلي)
 async function loadImageData() {
   try {
-    // محاولة تحميل من Firestore أولاً (الأولوية)
-    console.log('📤 محاولة تحميل البيانات من Firestore...');
+    console.log('📤 تحميل البيانات من Firestore...');
     const firestoreData = await getImagesFromFirestore();
     
-    if (Object.keys(firestoreData).length > 100) {
-      console.log('✅ تم التحميل من Firestore بنجاح');
-      IMAGE_META = firestoreData;
-      return true;
-    }
-    
-    // إذا Firestore فارغ أو فاشل → تحميل من المحلي كـ fallback
-    console.warn('⚠️ Firestore فارغ أو غير متاح - تحميل من الملف المحلي...');
-    const localData = loadImageDataLocal();
-    
-    if (Object.keys(localData).length === 0) {
-      console.warn('⚠️ لم يتمكن من تحميل البيانات');
+    if (Object.keys(firestoreData).length === 0) {
+      console.error('❌ Firestore فارغ! لا توجد صور للبحث فيها');
       return false;
     }
 
-    IMAGE_META = localData;
-    
-    // محاولة نقل إلى Firestore
-    console.log('📤 محاولة نقل البيانات إلى Firestore...');
-    const migrated = await migrateDataToFirestore(localData);
-    
-    return Object.keys(IMAGE_META).length > 0;
+    console.log('✅ تم التحميل من Firestore بنجاح:', Object.keys(firestoreData).length, 'صورة');
+    IMAGE_META = firestoreData;
+    return true;
   } catch (err) {
-    console.warn('⚠️ خطأ في تحميل البيانات:', err.message);
-    // fallback نهائي للملف المحلي
-    IMAGE_META = loadImageDataLocal();
-    return Object.keys(IMAGE_META).length > 0;
+    console.error('❌ خطأ في تحميل البيانات من Firestore:', err.message);
+    return false;
   }
 }
 
