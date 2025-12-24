@@ -4,7 +4,7 @@
 const TelegramBot = require('node-telegram-bot-api');
 const fs = require('fs');
 const path = require('path');
-const { getImagesFromFirestore, migrateDataToFirestore } = require('./lib/firebase');
+const { getImagesFromFirestore, migrateDataToFirestore, migrateToFirebaseStorage } = require('./lib/firebase');
 
 let bot = null;
 let isStarting = false;
@@ -56,6 +56,12 @@ async function loadImageData() {
       if (Object.keys(firestoreData).length > 100) {
         console.log('✅ تم التحميل من Firestore بعد النقل الناجح');
         IMAGE_META = firestoreData;
+        
+        // ثم بدء نقل الصور إلى Firebase Storage (غير متزامن)
+        console.log('🔄 جاري نقل الصور إلى Firebase Storage...');
+        migrateToFirebaseStorage(localData).catch(err => {
+          console.error('❌ خطأ في نقل الصور إلى Storage:', err.message);
+        });
       }
     }
     
@@ -158,7 +164,12 @@ async function startBotPolling() {
             
             // البحث بالكلمات الجزئية
             if (nameNorm.includes(searchNorm) || searchNorm.includes(nameNorm)) {
-              results.push({ url, name });
+              results.push({ 
+                url, 
+                name, 
+                // استخدم Firebase Storage URL إذا كانت متوفرة، وإلا استخدم الرابط الأصلي
+                imageUrl: meta.storageUrl || url
+              });
             }
           }
 
@@ -170,7 +181,7 @@ async function startBotPolling() {
             // إرسال أول 5 صور فقط
             for (const img of results.slice(0, 5)) {
               try {
-                await bot.sendPhoto(chatId, img.url, { caption: `📸 ${img.name}` });
+                await bot.sendPhoto(chatId, img.imageUrl, { caption: `📸 ${img.name}` });
               } catch (err) {
                 console.error(`❌ خطأ في إرسال صورة: ${err.message}`);
               }
