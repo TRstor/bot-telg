@@ -31,7 +31,7 @@ if (!token) {
 console.log('✅ التوكن موجود (الأول 20 حرف):', token.substring(0, 20) + '...');
 
 try {
-  const bot = new TelegramBot(token, { polling: true });
+  const botاف = new TelegramBot(token, { polling: true });
   const GALLERY_URL = process.env.RENDER_EXTERNAL_URL || 'https://bot-tel-4p2k.onrender.com';
   
   console.log('✅ البوت تم إنشاؤه بنجاح');
