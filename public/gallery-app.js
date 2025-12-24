@@ -31,9 +31,16 @@ const CATS = {
 };
 
 function getCategoryForUrl(url){
+  if (favorites.includes(url)) return "مفضلة";
+  
+  const meta = IMAGE_META[url];
+  if (meta && meta.keywords && Array.isArray(meta.keywords)) {
+    if (meta.keywords.includes(400)) return "كورية";
+    if (meta.keywords.includes("home") || meta.keywords.includes('all')) return "المنزل";
+  }
+  
   if (KOREA_URLS.includes(url)) return "كورية";
   if (HOME_URLS.includes(url)) return "المنزل";
-  if (favorites.includes(url)) return "مفضلة";
   return "عالمية";
 }
 
@@ -249,19 +256,41 @@ async function loadImagesFromFirestore() {
     if (data.images && typeof data.images === 'object') {
       // تحويل البيانات من {url: {name, keywords}} إلى arrays
       const loadedImages = [];
+      const koreaImages = [];
+      const homeImages = [];
+      
       for (const [url, meta] of Object.entries(data.images)) {
         if (url && meta && meta.name) {
           loadedImages.push(url);
           // تحديث IMAGE_META
           IMAGE_META[url] = meta;
+          
+          // تصنيف الصور حسب keywords
+          if (meta.keywords && Array.isArray(meta.keywords)) {
+            if (meta.keywords.includes(400)) {
+              koreaImages.push(url);
+            } else if (meta.keywords.includes("home") || meta.keywords.includes('all')) {
+              homeImages.push(url);
+            }
+          }
         }
       }
       
       if (loadedImages.length > 0) {
         topImages.length = 0;
         topImages.push(...loadedImages);
+        
+        KOREA_URLS.length = 0;
+        KOREA_URLS.push(...koreaImages);
+        
+        HOME_URLS.length = 0;
+        HOME_URLS.push(...homeImages);
+        
         CATS.all = topImages;
-        console.log(`✅ تم تحميل ${loadedImages.length} صورة`);
+        CATS.korea = KOREA_URLS;
+        CATS.home = HOME_URLS;
+        
+        console.log(`✅ تم تحميل ${loadedImages.length} صورة (${koreaImages.length} كورية، ${homeImages.length} منزل)`);
       }
     }
   } catch (err) {
