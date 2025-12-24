@@ -4,9 +4,8 @@ import { useEffect } from 'react';
 
 export default function GalleryPage() {
   useEffect(() => {
-    const script = document.createElement('script');
     // استيراد GalleryScript
-    import('../components/GalleryScript.js').then(({ default: GalleryScript }) => {
+    import('../../components/GalleryScript.js').then(({ default: GalleryScript }) => {
       GalleryScript();
     });
   }, []);
