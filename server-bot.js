@@ -4,7 +4,7 @@
 const TelegramBot = require('node-telegram-bot-api');
 const fs = require('fs');
 const path = require('path');
-const { getImagesFromFirestore, migrateDataToFirestore, migrateToFirebaseStorage } = require('./lib/firebase');
+const { getImagesFromFirestore, migrateDataToFirestore, addImageToFirestore } = require('./lib/firebase');
 
 let bot = null;
 let isStarting = false;
@@ -315,12 +315,14 @@ async function startBotPolling() {
             // استخدام file_id من Telegram مباشرة كـ URL
             const imageUrl = `tg://file/${state.photo}`;
             
-            const { addImageToFirestore } = require('./lib/firebase');
+            console.log(`📝 جاري حفظ الصورة: ${state.name}`);
             const added = await addImageToFirestore(
               imageUrl,
               state.name,
               [category]
             );
+            
+            console.log(`💾 نتيجة الحفظ: ${added}`);
             
             if (added) {
               // تحديث IMAGE_META محلياً
@@ -329,19 +331,23 @@ async function startBotPolling() {
                 keywords: [category]
               };
               
+              console.log(`✅ تم حفظ الصورة بنجاح: ${state.name}`);
+              
               await bot.sendMessage(chatId,
                 `✅ تمت الإضافة بنجاح!\n\n` +
                 `📸 ${state.name}\n` +
                 `🎯 ${categoryName}`
               );
             } else {
-              await bot.sendMessage(chatId, '❌ حدث خطأ في حفظ الصورة');
+              console.log(`❌ فشل حفظ الصورة: ${state.name}`);
+              await bot.sendMessage(chatId, '❌ حدث خطأ في حفظ الصورة في قاعدة البيانات');
             }
             
             delete userStates[chatId];
           } catch (err) {
             console.error('❌ خطأ في إضافة الصورة:', err.message);
-            await bot.sendMessage(chatId, '❌ حدث خطأ في الحفظ');
+            console.error('📋 التفاصيل:', err);
+            await bot.sendMessage(chatId, `❌ حدث خطأ في الحفظ:\n${err.message}`);
             delete userStates[chatId];
           }
         } else if (data.startsWith('cat_')) {
