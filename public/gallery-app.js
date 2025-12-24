@@ -247,11 +247,13 @@ async function loadImagesFromFirestore() {
     
     const data = await response.json();
     if (data.images && typeof data.images === 'object') {
-      // تحويل البيانات من {url: {name, keywords}} إلى topImages array
+      // تحويل البيانات من {url: {name, keywords}} إلى arrays
       const loadedImages = [];
       for (const [url, meta] of Object.entries(data.images)) {
         if (url && meta && meta.name) {
           loadedImages.push(url);
+          // تحديث IMAGE_META
+          IMAGE_META[url] = meta;
         }
       }
       
