@@ -74,6 +74,23 @@ async function startBotPolling() {
     // تحميل بيانات الصور
     await loadImageData();
 
+    // تنظيف cache المفضلات القديمة كل ساعة
+    setInterval(() => {
+      const now = Date.now();
+      let cleanedCount = 0;
+      
+      for (const hash in imageCache) {
+        if (imageCache[hash].timestamp && now - imageCache[hash].timestamp > 3600000) {
+          delete imageCache[hash];
+          cleanedCount++;
+        }
+      }
+      
+      if (cleanedCount > 0) {
+        console.log(`🧹 تم تنظيف ${cleanedCount} صورة قديمة من cache`);
+      }
+    }, 3600000); // كل ساعة
+
     // 📨 معالجة الرسائل
     bot.on('message', async (msg) => {
       const chatId = msg.chat.id;
@@ -270,7 +287,7 @@ async function startBotPolling() {
               
               // حفظ الصورة في cache مؤقتاً
               const urlHash = getUrlHash(img.url);
-              imageCache[urlHash] = { url: img.url, name: img.name };
+              imageCache[urlHash] = { url: img.url, name: img.name, timestamp: Date.now() };
               
               await bot.sendPhoto(chatId, img.url, { 
                 caption: `📸 ${img.name}`,
