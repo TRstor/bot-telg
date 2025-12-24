@@ -36,30 +36,36 @@ function loadImageDataLocal() {
 // تحميل البيانات من Firestore أولاً، وإلا من الملف
 async function loadImageData() {
   try {
-    // محاولة تحميل من Firestore
-    const firestoreData = await getImagesFromFirestore();
-    if (Object.keys(firestoreData).length > 0) {
-      IMAGE_META = firestoreData;
-      return true;
+    // تحميل من الملف المحلي أولاً
+    const localData = loadImageDataLocal();
+    
+    if (Object.keys(localData).length === 0) {
+      console.warn('⚠️ لم يتمكن من تحميل البيانات المحلية');
+      return false;
     }
-  } catch (err) {
-    console.warn('⚠️ خطأ في تحميل من Firestore:', err.message);
-  }
 
-  // إذا فشل Firestore، تحميل من الملف
-  const localData = loadImageDataLocal();
-  IMAGE_META = localData;
-  
-  // محاولة نقل البيانات إلى Firestore
-  if (Object.keys(localData).length > 0) {
-    try {
-      await migrateDataToFirestore(localData);
-    } catch (err) {
-      console.warn('⚠️ لم يتمكن من نقل البيانات:', err.message);
+    IMAGE_META = localData;
+    
+    // ثم محاولة نقل إلى Firestore
+    console.log('📤 محاولة نقل البيانات إلى Firestore...');
+    const migrated = await migrateDataToFirestore(localData);
+    
+    if (migrated) {
+      // إذا نقلت بنجاح، حمّل من Firestore
+      const firestoreData = await getImagesFromFirestore();
+      if (Object.keys(firestoreData).length > 100) {
+        console.log('✅ تم التحميل من Firestore بعد النقل الناجح');
+        IMAGE_META = firestoreData;
+      }
     }
+    
+    return Object.keys(IMAGE_META).length > 0;
+  } catch (err) {
+    console.warn('⚠️ خطأ في تحميل البيانات:', err.message);
+    // حمّل من الملف المحلي على الأقل
+    IMAGE_META = loadImageDataLocal();
+    return Object.keys(IMAGE_META).length > 0;
   }
-  
-  return Object.keys(IMAGE_META).length > 0;
 }
 
 async function startBotPolling() {
