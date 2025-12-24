@@ -29,18 +29,80 @@ try {
   console.log('🔄 وضع البوت: Polling (الاستقصاء)');
   console.log('='.repeat(60) + '\n');
 
-  // استمع على أي رسالة
+  // معالجة الرسائل العادية (البحث عن الصور)
   bot.on('message', (msg) => {
     if (!msg.text) return;
     
     const chatId = msg.chat.id;
     const userId = msg.from.id;
     const userName = msg.from.username || msg.from.first_name;
+    const searchText = msg.text.trim();
+    
+    // تجاهل الأوامر
+    if (searchText.startsWith('/')) return;
     
     console.log('\n📨 رسالة جديدة:');
     console.log(`   👤 من: ${userName} (ID: ${userId})`);
-    console.log(`   💬 النص: ${msg.text.substring(0, 50)}${msg.text.length > 50 ? '...' : ''}`);
+    console.log(`   💬 النص: ${searchText.substring(0, 50)}${searchText.length > 50 ? '...' : ''}`);
     console.log(`   🔗 Chat ID: ${chatId}`);
+    
+    // محاولة البحث عن الصورة بالاسم
+    if (searchText.length > 2) {
+      const searchNormalized = searchText.toLowerCase().trim();
+      let foundImage = null;
+      let foundName = '';
+      
+      console.log(`   🔍 البحث عن: "${searchText}"`);
+      
+      // البحث في البيانات
+      for (const [imageUrl, metadata] of Object.entries(require('./public/gallery-data.js').IMAGE_META || {})) {
+        if (metadata.name && metadata.name.toLowerCase().includes(searchNormalized)) {
+          foundImage = imageUrl;
+          foundName = metadata.name;
+          console.log(`   ✅ وجدت صورة: ${foundName}`);
+          break;
+        }
+      }
+      
+      if (foundImage) {
+        console.log(`   ➡️  إرسال الصورة: ${foundName}`);
+        
+        bot.sendPhoto(chatId, foundImage, {
+          caption: `🖼️ *${foundName}*\n\nللمزيد من الصور اضغط على /gallery`,
+          parse_mode: 'Markdown',
+          reply_markup: {
+            inline_keyboard: [
+              [{text: '🎨 المعرض الكامل', url: GALLERY_URL}],
+              [{text: '🏠 الرئيسية', callback_data: 'start_menu'}]
+            ]
+          }
+        }).then(() => {
+          console.log('   ✅ تم إرسال الصورة بنجاح');
+        }).catch((err) => {
+          console.error('   ❌ خطأ في الإرسال:', err.message);
+        });
+      } else {
+        console.log(`   ❌ لم أجد صورة باسم: "${searchText}"`);
+        console.log(`   💡 اقترحات: جرّب /gallery للبحث المتقدم`);
+        
+        bot.sendMessage(chatId,
+          `❌ لم أجد صورة باسم "*${searchText}*"\n\n💡 جرّب:\n- /gallery للبحث الكامل\n- /categories لعرض الفئات\n- /start للقائمة الرئيسية`,
+          {
+            parse_mode: 'Markdown',
+            reply_markup: {
+              inline_keyboard: [
+                [{text: '🎨 المعرض', url: GALLERY_URL}],
+                [{text: '🏠 الرئيسية', callback_data: 'start_menu'}]
+              ]
+            }
+          }
+        ).then(() => {
+          console.log('   ✅ تم إرسال رسالة "لم أجد"');
+        }).catch((err) => {
+          console.error('   ❌ خطأ:', err.message);
+        });
+      }
+    }
   });
 
   // أمر البدء
