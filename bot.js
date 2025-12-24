@@ -1,6 +1,16 @@
 const TelegramBot = require('node-telegram-bot-api');
 const GalleryCommands = require('./utils/galleryCommands');
 
+// ✅ تحميل بيانات الصور
+let IMAGE_META = {};
+try {
+  const galleryData = require('./public/gallery-data.js');
+  IMAGE_META = galleryData.IMAGE_META || {};
+  console.log('✅ تم تحميل بيانات الصور:', Object.keys(IMAGE_META).length, 'صورة');
+} catch (err) {
+  console.warn('⚠️  لم يتمكن من تحميل بيانات الصور:', err.message);
+}
+
 const token = process.env.TELEGRAM_BOT_TOKEN;
 
 // 🔍 فحص التوكن
@@ -53,14 +63,18 @@ try {
       let foundName = '';
       
       console.log(`   🔍 البحث عن: "${searchText}"`);
+      console.log(`   📊 عدد الصور المتاحة: ${Object.keys(IMAGE_META).length}`);
       
       // البحث في البيانات
-      for (const [imageUrl, metadata] of Object.entries(require('./public/gallery-data.js').IMAGE_META || {})) {
-        if (metadata.name && metadata.name.toLowerCase().includes(searchNormalized)) {
-          foundImage = imageUrl;
-          foundName = metadata.name;
-          console.log(`   ✅ وجدت صورة: ${foundName}`);
-          break;
+      for (const [imageUrl, metadata] of Object.entries(IMAGE_META)) {
+        if (metadata && metadata.name) {
+          const imageName = String(metadata.name).toLowerCase();
+          if (imageName.includes(searchNormalized)) {
+            foundImage = imageUrl;
+            foundName = metadata.name;
+            console.log(`   ✅ وجدت صورة: ${foundName}`);
+            break;
+          }
         }
       }
       
@@ -83,7 +97,7 @@ try {
         });
       } else {
         console.log(`   ❌ لم أجد صورة باسم: "${searchText}"`);
-        console.log(`   💡 اقترحات: جرّب /gallery للبحث المتقدم`);
+        console.log(`   💡 جرّب الأسماء: ${Object.values(IMAGE_META).slice(0, 3).map(m => m.name).join(', ')}`);
         
         bot.sendMessage(chatId,
           `❌ لم أجد صورة باسم "*${searchText}*"\n\n💡 جرّب:\n- /gallery للبحث الكامل\n- /categories لعرض الفئات\n- /start للقائمة الرئيسية`,
