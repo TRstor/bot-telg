@@ -162,7 +162,97 @@ try {
 
   // معالجة الأزرار
   bot.on('callback_query', (query) => {
-    console.log(`\n🔘 ضغطة زر: ${query.data} من ${query.from.first_name}`);
+    const chatId = query.message.chat.id;
+    const messageId = query.message.message_id;
+    const data = query.data;
+    
+    console.log(`\n🔘 ضغطة زر: ${data} من ${query.from.first_name}`);
+    
+    if (data === 'categories') {
+      const categories = GalleryCommands.getCategories();
+      console.log(`   ➡️  تحديث الرسالة بقائمة الفئات...`);
+      
+      let text = '📂 *الفئات المتاحة:*\n\n';
+      categories.forEach((cat, idx) => {
+        text += `${cat.emoji} *${cat.name}*\n${cat.count}\n`;
+        if (idx < categories.length - 1) text += '\n';
+      });
+      
+      bot.editMessageText(text, {
+        chat_id: chatId,
+        message_id: messageId,
+        parse_mode: 'Markdown',
+        reply_markup: {inline_keyboard: [
+          [{text: '🎨 المعرض', url: GALLERY_URL}],
+          [{text: '⬅️ رجوع', callback_data: 'start_menu'}]
+        ]}
+      }).then(() => {
+        console.log('   ✅ تم التحديث بنجاح');
+      }).catch((err) => {
+        console.error('   ❌ خطأ:', err.message);
+      });
+      
+    } else if (data === 'help') {
+      console.log(`   ➡️  تحديث الرسالة بالمساعدة...`);
+      
+      bot.editMessageText(
+        `💡 *الأوامر:*\n/start - البدء\n/gallery - المعرض\n/categories - الفئات\n/help - المساعدة`,
+        {
+          chat_id: chatId,
+          message_id: messageId,
+          parse_mode: 'Markdown',
+          reply_markup: {inline_keyboard: [
+            [{text: '⬅️ رجوع', callback_data: 'start_menu'}]
+          ]}
+        }
+      ).then(() => {
+        console.log('   ✅ تم التحديث بنجاح');
+      }).catch((err) => {
+        console.error('   ❌ خطأ:', err.message);
+      });
+      
+    } else if (data === 'info') {
+      console.log(`   ➡️  تحديث الرسالة بالمعلومات...`);
+      
+      bot.editMessageText(
+        `ℹ️ *معرض الشعبيات*\n\n📊 600+ صورة\n🔍 بحث عربي\n♥️ مفضلة\n📂 تصنيفات`,
+        {
+          chat_id: chatId,
+          message_id: messageId,
+          parse_mode: 'Markdown',
+          reply_markup: {inline_keyboard: [
+            [{text: '🎨 المعرض', url: GALLERY_URL}],
+            [{text: '⬅️ رجوع', callback_data: 'start_menu'}]
+          ]}
+        }
+      ).then(() => {
+        console.log('   ✅ تم التحديث بنجاح');
+      }).catch((err) => {
+        console.error('   ❌ خطأ:', err.message);
+      });
+      
+    } else if (data === 'start_menu') {
+      const firstName = query.from.first_name;
+      console.log(`   ➡️  العودة للقائمة الرئيسية...`);
+      
+      bot.editMessageText(
+        `👋 *مرحبًا ${firstName}!*\n\n🎨 *معرض الشعبيات*\n\n✨ الميزات:\n🖼️ 600+ صورة\n🔍 بحث عربي\n♥️ مفضلة\n📂 فئات`,
+        {
+          chat_id: chatId,
+          message_id: messageId,
+          parse_mode: 'Markdown',
+          reply_markup: {inline_keyboard: [
+            [{text: '🎨 فتح المعرض', url: GALLERY_URL}, {text: '❓ المساعدة', callback_data: 'help'}],
+            [{text: '📂 الفئات', callback_data: 'categories'}, {text: 'ℹ️ المعرض', callback_data: 'info'}]
+          ]}
+        }
+      ).then(() => {
+        console.log('   ✅ تم التحديث بنجاح');
+      }).catch((err) => {
+        console.error('   ❌ خطأ:', err.message);
+      });
+    }
+    
     bot.answerCallbackQuery(query.id, '✅', false);
   });
 
