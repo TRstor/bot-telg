@@ -180,15 +180,15 @@ async function startBotPolling() {
           // بدء عملية إضافة صورة جديدة
           userStates[chatId] = {
             step: 1,
-            photo: null,
+            imageUrl: null,
             name: '',
             category: ''
           };
           
           await bot.sendMessage(chatId,
             '🖼️ الخطوة 1/3\n\n' +
-            'أرسل الصورة التي تريد إضافتها\n' +
-            '(PNG أو JPG أو WebP)\n\n' +
+            'أرسل رابط الصورة (URL)\n' +
+            'مثال: https://i.ibb.co/abc123/image.jpg\n\n' +
             'لإلغاء العملية: /cancel',
             {
               reply_markup: {
@@ -207,6 +207,32 @@ async function startBotPolling() {
             await bot.sendMessage(chatId, '⚠️ لا توجد عملية جارية');
           }
         } else if (!text.startsWith('/') && text.trim()) {
+          // التحقق من حالة المستخدم - هل هو في خطوة إضافة رابط الصورة؟
+          if (userStates[chatId]?.step === 1) {
+            // التحقق من أن النص هو رابط URL صحيح
+            try {
+              new URL(text);
+              userStates[chatId].imageUrl = text;
+              userStates[chatId].step = 2;
+              
+              await bot.sendMessage(chatId,
+                '📝 الخطوة 2/3\n\n' +
+                'أرسل اسم الصورة (الاسم الذي سيظهر في البحث)',
+                {
+                  reply_markup: {
+                    inline_keyboard: [
+                      [{ text: '❌ إلغاء', callback_data: 'cancel_add' }]
+                    ]
+                  }
+                }
+              );
+              return;
+            } catch (err) {
+              await bot.sendMessage(chatId, '❌ الرجاء إرسال رابط صحيح يبدأ بـ https://\nمثال: https://i.ibb.co/abc123/image.jpg');
+              return;
+            }
+          }
+          
           // التحقق من حالة المستخدم - هل هو في خطوة إضافة اسم الصورة؟
           if (userStates[chatId]?.step === 2) {
             userStates[chatId].name = text;
@@ -300,38 +326,7 @@ async function startBotPolling() {
       }
     });
 
-    // � معالجة استقبال الصور
-    bot.on('photo', async (msg) => {
-      const chatId = msg.chat.id;
-      
-      try {
-        // التحقق من أن المستخدم في عملية إضافة صورة
-        if (!userStates[chatId] || userStates[chatId].step !== 1) {
-          await bot.sendMessage(chatId, 
-            '⚠️ استخدم /addimage أولاً لإضافة صورة جديدة');
-          return;
-        }
-
-        // حفظ معرف الصورة من Telegram
-        const photo = msg.photo[msg.photo.length - 1]; // أعلى جودة
-        
-        userStates[chatId].photo = photo.file_id;
-        userStates[chatId].step = 2;
-
-        // طلب اسم الصورة
-        await bot.sendMessage(chatId,
-          '📝 الخطوة 2/3\n\n' +
-          'اكتب اسم الصورة:\n' +
-          '(مثال: سونيك أحمر، عروس، ...)'
-        );
-      } catch (err) {
-        console.error('❌ خطأ في استقبال الصورة:', err.message);
-        await bot.sendMessage(chatId, '❌ حدث خطأ في استقبال الصورة');
-        delete userStates[chatId];
-      }
-    });
-
-    // �🔘 معالجة الأزرار
+    // 🔘 معالجة الأزرار
     bot.on('callback_query', async (query) => {
       const { id, data, from } = query;
       const chatId = from.id;
@@ -384,16 +379,20 @@ async function startBotPolling() {
             userStates[chatId].category = category;
             const state = userStates[chatId];
             
+            // التحقق من أن لدينا جميع البيانات المطلوبة
+            if (!state.imageUrl || !state.name) {
+              await bot.sendMessage(chatId, '⚠️ حدث خطأ. استخدم /addimage للبدء من جديد');
+              delete userStates[chatId];
+              return;
+            }
+            
             // حفظ الصورة في Firestore
             const catNames = { korea: 'كوري', all: 'عالمي', home: 'المنزل' };
             const categoryName = catNames[category] || category;
             
-            // استخدام file_id من Telegram مباشرة كـ URL
-            const imageUrl = `tg://file/${state.photo}`;
-            
             console.log(`📝 جاري حفظ الصورة: ${state.name}`);
             const added = await addImageToFirestore(
-              imageUrl,
+              state.imageUrl,
               state.name,
               [category]
             );
@@ -402,7 +401,7 @@ async function startBotPolling() {
             
             if (added) {
               // تحديث IMAGE_META محلياً
-              IMAGE_META[imageUrl] = {
+              IMAGE_META[state.imageUrl] = {
                 name: state.name,
                 keywords: [category]
               };
@@ -417,7 +416,8 @@ async function startBotPolling() {
               await bot.sendMessage(chatId,
                 `✅ تمت الإضافة بنجاح!\n\n` +
                 `📸 ${state.name}\n` +
-                `🎯 ${categoryName}`
+                `🎯 ${categoryName}\n` +
+                `🔗 ${state.imageUrl}`
               );
             } else {
               console.log(`❌ فشل حفظ الصورة: ${state.name}`);
